@@ -153,6 +153,45 @@ export default function Dashboard() {
     fetchAttendance();
   };
 
+  const handleBulkMarkAll = async (status: AttendanceStatus) => {
+    const dateStr = format(selectedDate, 'yyyy-MM-dd');
+    const promises = students.map(async (student) => {
+      const existing = attendance.find((a) => a.student_id === student.id);
+
+      if (existing) {
+        return supabase
+          .from('attendance')
+          .update({ status, time_marked: new Date().toISOString(), marked_by: user?.id })
+          .eq('id', existing.id);
+      } else {
+        return supabase.from('attendance').insert({
+          student_id: student.id,
+          date: dateStr,
+          status,
+          marked_by: user?.id,
+        });
+      }
+    });
+
+    const results = await Promise.all(promises);
+    const hasError = results.some((r) => r.error);
+
+    if (hasError) {
+      toast({
+        title: 'Error',
+        description: 'Some attendance records failed to update',
+        variant: 'destructive'
+      });
+    } else {
+      toast({
+        title: 'Success',
+        description: `Marked ${students.length} students as ${status}`,
+      });
+    }
+
+    fetchAttendance();
+  };
+
   const handleStudentClick = (student: Student) => {
     setSelectedStudent(student);
     setShowStudentModal(true);
@@ -352,6 +391,7 @@ export default function Dashboard() {
                     canEdit={canEdit}
                     filterStatus={activeStatusFilter}
                     onStudentClick={handleStudentClick}
+                    onClearFilter={() => setActiveStatusFilter(null)}
                   />
                 ) : (
                   <SpreadsheetView
@@ -372,7 +412,7 @@ export default function Dashboard() {
             </div>
           </div>
         </div>
-      </main>
+      </main >
 
       <StudentAnalyticsModal
         student={selectedStudent}
@@ -385,6 +425,6 @@ export default function Dashboard() {
         onOpenChange={setShowAddStudentDialog}
         onStudentAdded={fetchStudents}
       />
-    </div>
+    </div >
   );
 }
