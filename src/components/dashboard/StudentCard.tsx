@@ -10,91 +10,94 @@ interface StudentCardProps {
   canEdit: boolean;
   timeMarked?: string;
   onClick?: () => void;
+  index?: number;
 }
 
-export function StudentCard({ student, status, onStatusChange, canEdit, timeMarked, onClick }: StudentCardProps) {
+export function StudentCard({ student, status, onStatusChange, canEdit, timeMarked, onClick, index = 0 }: StudentCardProps) {
+
   const statusButtons = [
-    { value: 'present' as AttendanceStatus, icon: CheckCircle2, label: 'Present', bgClass: 'bg-success', textClass: 'text-success-foreground', borderClass: 'border-success', hoverClass: 'hover:bg-success/90' },
-    { value: 'absent' as AttendanceStatus, icon: XCircle, label: 'Absent', bgClass: 'bg-destructive', textClass: 'text-destructive-foreground', borderClass: 'border-destructive', hoverClass: 'hover:bg-destructive/90' },
-    { value: 'od' as AttendanceStatus, icon: Clock, label: 'On Duty', bgClass: 'bg-warning', textClass: 'text-warning-foreground', borderClass: 'border-warning', hoverClass: 'hover:bg-warning/90' },
+    { value: 'present' as AttendanceStatus, icon: CheckCircle2, label: 'Present', activeColor: 'bg-emerald-500 text-white shadow-emerald-500/40', borderColor: 'border-emerald-500/50', hover: 'hover:border-emerald-500/50 hover:bg-emerald-500/10 hover:text-emerald-400' },
+    { value: 'absent' as AttendanceStatus, icon: XCircle, label: 'Absent', activeColor: 'bg-rose-500 text-white shadow-rose-500/40', borderColor: 'border-rose-500/50', hover: 'hover:border-rose-500/50 hover:bg-rose-500/10 hover:text-rose-400' },
+    { value: 'od' as AttendanceStatus, icon: Clock, label: 'On Duty', activeColor: 'bg-amber-500 text-white shadow-amber-500/40', borderColor: 'border-amber-500/50', hover: 'hover:border-amber-500/50 hover:bg-amber-500/10 hover:text-amber-400' },
   ];
 
   return (
     <div className={cn(
-      'group p-4 rounded-2xl glass border-2 transition-all duration-300 hover:shadow-xl animate-fade-in',
-      status === 'present' && 'border-success/40 bg-success/5',
-      status === 'absent' && 'border-destructive/40 bg-destructive/5',
-      status === 'od' && 'border-warning/40 bg-warning/5',
-      !['present', 'absent', 'od'].includes(status) && 'border-border/50'
+      'group relative p-4 rounded-2xl transition-all duration-300 animate-fade-in',
+      'glass-card border border-white/5 bg-white/[0.02] hover:bg-white/[0.05]',
+      status === 'present' && 'border-l-4 border-l-emerald-500',
+      status === 'absent' && 'border-l-4 border-l-rose-500',
+      status === 'od' && 'border-l-4 border-l-amber-500',
+      !status && 'border-l-4 border-l-transparent'
     )}>
       <div className="flex items-center justify-between gap-4">
-        <div 
-          className="flex items-center gap-4 flex-1 min-w-0 cursor-pointer group-hover:scale-[1.01] transition-transform"
+        <div
+          className="flex items-center gap-4 flex-1 min-w-0 cursor-pointer"
           onClick={onClick}
         >
-          <div className={cn(
-            "w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 transition-all duration-300",
-            status === 'present' && 'bg-success/20',
-            status === 'absent' && 'bg-destructive/20',
-            status === 'od' && 'bg-warning/20',
-            !['present', 'absent', 'od'].includes(status) && 'bg-muted'
-          )}>
-            <User className={cn(
-              "w-7 h-7 transition-colors",
-              status === 'present' && 'text-success',
-              status === 'absent' && 'text-destructive',
-              status === 'od' && 'text-warning',
-              !['present', 'absent', 'od'].includes(status) && 'text-muted-foreground'
-            )} />
+          {/* Avatar / Icon */}
+          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-violet-500/20 to-fuchsia-500/20 flex items-center justify-center shrink-0 border border-white/10 group-hover:scale-105 transition-transform duration-300 group-hover:shadow-[0_0_15px_rgba(139,92,246,0.3)]">
+            <User className="w-6 h-6 text-violet-300" />
           </div>
+
+          {/* Text Info */}
           <div className="min-w-0 space-y-1">
-            <h3 className="font-bold text-lg truncate tracking-tight">{student.name}</h3>
-            <p className="text-sm text-muted-foreground font-mono">{student.register_number}</p>
-            <div className="flex items-center gap-2">
-              <span className="text-xs px-2 py-1 rounded-full bg-primary/10 text-primary font-medium">{student.department}</span>
-              <span className="text-xs px-2 py-1 rounded-full bg-muted text-muted-foreground">
-                {student.hostel_or_dayscolar}
+            <h3 className="font-bold text-base text-white truncate tracking-tight group-hover:text-primary transition-colors">
+              {student.name}
+            </h3>
+            <p className="text-xs text-white/40 font-mono tracking-wider">{student.register_number}</p>
+
+            <div className="flex items-center gap-2 mt-1">
+              <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded-md bg-white/5 text-white/60 border border-white/5">
+                {student.department}
               </span>
+              {student.hostel_or_dayscolar === 'Hosteller' && (
+                <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded-md bg-indigo-500/20 text-indigo-300 border border-indigo-500/20">
+                  Hostel
+                </span>
+              )}
             </div>
-            {timeMarked && (
-              <p className="text-xs text-muted-foreground font-mono">
-                ⏱ {new Date(timeMarked).toLocaleTimeString()}
-              </p>
-            )}
           </div>
         </div>
 
-        <div className="flex gap-2 shrink-0">
+        {/* Actions */}
+        <div className="flex gap-1.5 shrink-0">
           {statusButtons.map((btn) => {
             const Icon = btn.icon;
             const isActive = status === btn.value;
 
             return (
-              <Button
+              <button
                 key={btn.value}
-                variant="outline"
-                size="sm"
                 disabled={!canEdit}
                 onClick={(e) => {
                   e.stopPropagation();
                   onStatusChange(student.id, btn.value);
                 }}
                 className={cn(
-                  'px-4 py-3 h-auto rounded-xl border-2 transition-all duration-200 flex flex-col items-center gap-1.5 min-w-[80px] font-semibold',
-                  isActive && `${btn.bgClass} ${btn.textClass} ${btn.borderClass} shadow-lg`,
-                  isActive && btn.value === 'present' && 'shadow-success/30',
-                  isActive && btn.value === 'absent' && 'shadow-destructive/30',
-                  isActive && btn.value === 'od' && 'shadow-warning/30',
-                  !isActive && 'hover:scale-105 hover:border-border'
+                  'w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-300 border',
+                  isActive
+                    ? `${btn.activeColor} border-transparent shadow-lg scale-105`
+                    : `bg-transparent border-white/5 text-white/20 ${btn.hover} hover:scale-105`
                 )}
+                title={btn.label}
               >
-                <Icon className="w-6 h-6" />
-                <span className="text-xs">{btn.label}</span>
-              </Button>
+                <Icon className={cn("w-5 h-5", isActive ? "animate-pulse" : "")} />
+              </button>
             );
           })}
         </div>
       </div>
+
+      {/* Time Marked Indicator */}
+      {timeMarked && (
+        <div className="absolute top-2 right-2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+          <Clock className="w-3 h-3 text-white/20" />
+          <span className="text-[10px] font-mono text-white/30">
+            {new Date(timeMarked).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+          </span>
+        </div>
+      )}
     </div>
   );
 }

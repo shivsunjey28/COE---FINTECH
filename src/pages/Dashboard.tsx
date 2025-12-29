@@ -1,8 +1,8 @@
 import { useEffect, useState, useMemo, useCallback } from 'react';
 import { format } from 'date-fns';
+import { utils, writeFile } from 'xlsx';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
-import { Header } from '@/components/layout/Header';
 import { DatePicker } from '@/components/dashboard/DatePicker';
 
 import { AttendanceList } from '@/components/dashboard/AttendanceList';
@@ -12,9 +12,10 @@ import { AddStudentDialog } from '@/components/dashboard/AddStudentDialog';
 import { AnalyticsCharts } from '@/components/analytics/AnalyticsCharts';
 import { Student, Attendance, AttendanceStatus, AttendanceStats } from '@/lib/types';
 import { toast } from '@/hooks/use-toast';
-import { Loader2, Table, LayoutGrid, Users, CheckCircle2, XCircle, Clock, UserPlus } from 'lucide-react';
+import { Loader2, Table, LayoutGrid, Users, CheckCircle2, XCircle, Clock, UserPlus, Search, Shield, LogOut } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 
 export default function Dashboard() {
   const { user, isAdmin } = useAuth();
@@ -28,6 +29,7 @@ export default function Dashboard() {
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   const [showAddStudentDialog, setShowAddStudentDialog] = useState(false);
   const [showStudentModal, setShowStudentModal] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -76,7 +78,7 @@ export default function Dashboard() {
     const { data, error } = await supabase
       .from('students')
       .select('*')
-      .order('name');
+      .order('created_at', { ascending: false }); // Newest students first
 
     if (error) {
       toast({ title: 'Error', description: 'Failed to fetch students', variant: 'destructive' });
@@ -153,52 +155,12 @@ export default function Dashboard() {
     fetchAttendance();
   };
 
-  const handleBulkMarkAll = async (status: AttendanceStatus) => {
-    const dateStr = format(selectedDate, 'yyyy-MM-dd');
-    const promises = students.map(async (student) => {
-      const existing = attendance.find((a) => a.student_id === student.id);
-
-      if (existing) {
-        return supabase
-          .from('attendance')
-          .update({ status, time_marked: new Date().toISOString(), marked_by: user?.id })
-          .eq('id', existing.id);
-      } else {
-        return supabase.from('attendance').insert({
-          student_id: student.id,
-          date: dateStr,
-          status,
-          marked_by: user?.id,
-        });
-      }
-    });
-
-    const results = await Promise.all(promises);
-    const hasError = results.some((r) => r.error);
-
-    if (hasError) {
-      toast({
-        title: 'Error',
-        description: 'Some attendance records failed to update',
-        variant: 'destructive'
-      });
-    } else {
-      toast({
-        title: 'Success',
-        description: `Marked ${students.length} students as ${status}`,
-      });
-    }
-
-    fetchAttendance();
-  };
-
   const handleStudentClick = (student: Student) => {
     setSelectedStudent(student);
     setShowStudentModal(true);
   };
 
   const handleDownload = useCallback(async () => {
-    // Fetch all attendance records for all students
     const { data: allAttendance, error } = await supabase
       .from('attendance')
       .select('*')
@@ -209,10 +171,7 @@ export default function Dashboard() {
       return;
     }
 
-    // Get unique dates
     const dates = [...new Set(allAttendance?.map(a => a.date) || [])].sort();
-
-    // Create attendance map: student_id -> date -> status
     const attendanceByStudentDate = new Map<string, Map<string, string>>();
     allAttendance?.forEach((a) => {
       if (!attendanceByStudentDate.has(a.student_id)) {
@@ -221,10 +180,11 @@ export default function Dashboard() {
       attendanceByStudentDate.get(a.student_id)!.set(a.date, a.status);
     });
 
-    // Calculate totals for each student
     const headers = ['S.No', 'Register Number', 'Name', 'Department', 'Type', ...dates.map(d => format(new Date(d), 'dd/MM')), 'Total Present', 'Total Absent', 'Total OD', 'Attendance %'];
 
-    const rows = students.map((student, index) => {
+    const data: (string | number)[][] = [headers];
+
+    students.forEach((student, index) => {
       const studentAttendance = attendanceByStudentDate.get(student.id) || new Map();
       let present = 0, absent = 0, od = 0;
 
@@ -240,10 +200,10 @@ export default function Dashboard() {
       const total = dates.length;
       const percentage = total > 0 ? Math.round((present / total) * 100) : 0;
 
-      return [
+      data.push([
         index + 1,
         student.register_number,
-        `"${student.name}"`,
+        student.name,
         student.department,
         student.hostel_or_dayscolar,
         ...dailyStatuses,
@@ -251,22 +211,20 @@ export default function Dashboard() {
         absent,
         od,
         `${percentage}%`,
-      ].join(',');
+      ]);
     });
 
-    const csv = [headers.join(','), ...rows].join('\n');
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `attendance-full-report-${format(new Date(), 'yyyy-MM-dd')}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    const worksheet = utils.aoa_to_sheet(data);
+    const wscols = headers.map(h => ({ wch: h.length + 5 }));
+    worksheet['!cols'] = wscols;
 
-    toast({ title: 'Downloaded', description: 'Complete attendance report downloaded successfully' });
+    const workbook = utils.book_new();
+    utils.book_append_sheet(workbook, worksheet, 'Attendance Report');
+    writeFile(workbook, `attendance-report-${format(new Date(), 'yyyy-MM-dd')}.xlsx`);
+
+    toast({ title: 'Downloaded', description: 'Complete attendance report downloaded successfully as Excel file' });
   }, [students]);
 
-  // Stats calculation - default absent for unmarked students
   const stats: AttendanceStats = useMemo(() => {
     const attendanceMap = new Map<string, Attendance>();
     attendance.forEach((a) => attendanceMap.set(a.student_id, a));
@@ -286,6 +244,17 @@ export default function Dashboard() {
     return { total: students.length, present, absent, od };
   }, [students, attendance]);
 
+  // Filter students based on search and status
+  const filteredStudents = useMemo(() => {
+    return students.filter(student => {
+      const matchesSearch = student.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        student.register_number.toLowerCase().includes(searchQuery.toLowerCase());
+      /* We handle status filtering in the AttendanceList component mostly, but for count consistency... */
+      return matchesSearch;
+    });
+  }, [students, searchQuery]);
+
+
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -295,124 +264,177 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-background fintech-grid">
-      <Header stats={stats} activeFilter={activeStatusFilter} onFilterChange={setActiveStatusFilter} />
-
-      <main className="container mx-auto px-4 pt-28 pb-12">
-        <div className="space-y-6 animate-fade-in">
-          {/* Title & Date Row */}
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 p-6 rounded-2xl glass border-border/30">
-            <div>
-              <h2 className="text-2xl font-bold tracking-tight">Attendance Dashboard</h2>
-              <p className="text-muted-foreground">
-                {format(selectedDate, 'EEEE, MMMM d, yyyy')}
-              </p>
+    <div className="space-y-8 pb-8">
+      {/* Top Header Section */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          {/* New Branding Section */}
+          <div className="flex items-center gap-3 mb-2">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center shadow-lg shadow-purple-500/20">
+              <span className="text-xl font-bold text-white">F</span>
             </div>
-            <DatePicker date={selectedDate} onDateChange={setSelectedDate} isAdmin={isAdmin} />
+            <div>
+              <h1 className="text-xl font-bold text-white tracking-wide leading-none">Fintech Coe</h1>
+              <p className="text-xs text-white/50 font-medium">Attendance Portal</p>
+            </div>
+          </div>
+          <p className="text-white/60">
+            Welcome back, admin. Here's today's attendance overview.
+          </p>
+        </div>
+
+        <div className="flex items-center gap-4">
+          {/* Search Bar */}
+          <div className="relative hidden md:block">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/50" />
+            <input
+              type="text"
+              placeholder="Search students..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="glass-input pl-9 pr-4 py-2.5 rounded-xl w-64 text-sm focus:outline-none focus:ring-1 focus:ring-primary/50 transition-all"
+            />
           </div>
 
-          {/* Filter Tabs */}
-          <div className="flex items-center gap-2 overflow-x-auto custom-scrollbar pb-1">
-            {[
-              { status: null, label: 'All', count: stats.total, icon: Users, color: 'primary' },
-              { status: 'present' as AttendanceStatus, label: 'Present', count: stats.present, icon: CheckCircle2, color: 'success' },
-              { status: 'absent' as AttendanceStatus, label: 'Absent', count: stats.absent, icon: XCircle, color: 'destructive' },
-              { status: 'od' as AttendanceStatus, label: 'On Duty', count: stats.od, icon: Clock, color: 'warning' },
-            ].map((tab) => {
-              const Icon = tab.icon;
-              const isActive = activeStatusFilter === tab.status;
+          <div className="flex items-center gap-2">
+            {isAdmin && (
+              <Badge variant="outline" className="border-primary/50 text-primary bg-primary/10 h-10 px-3 rounded-xl gap-2">
+                <Shield className="w-4 h-4" />
+                Admin
+              </Badge>
+            )}
 
-              return (
+            <DatePicker date={selectedDate} onDateChange={setSelectedDate} isAdmin={isAdmin} />
+
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => user && supabase.auth.signOut()}
+              className="h-10 w-10 rounded-xl bg-red-500/10 text-red-500 hover:bg-red-500/20 hover:text-red-400 transition-colors border border-red-500/20"
+              title="Sign Out"
+            >
+              <LogOut className="w-5 h-5" />
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      {/* Stats Cards Row */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {[
+          { label: 'Total Students', count: stats.total, icon: Users, color: 'text-violet-400', bg: 'bg-violet-500/10', border: 'border-violet-500/20' },
+          { label: 'Present', count: stats.present, icon: CheckCircle2, color: 'text-emerald-400', bg: 'bg-emerald-500/10', border: 'border-emerald-500/20' },
+          { label: 'Absent', count: stats.absent, icon: XCircle, color: 'text-rose-400', bg: 'bg-rose-500/10', border: 'border-rose-500/20' },
+          { label: 'On Duty', count: stats.od, icon: Clock, color: 'text-amber-400', bg: 'bg-amber-500/10', border: 'border-amber-500/20' },
+        ].map((stat) => (
+          <div key={stat.label} className={`glass-card p-5 flex items-start justify-between border ${stat.border} hover:bg-white/[0.07]`}>
+            <div>
+              <p className="text-sm font-medium text-white/60 mb-1">{stat.label}</p>
+              <h3 className="text-3xl font-bold text-white">{stat.count}</h3>
+            </div>
+            <div className={`p-3 rounded-xl ${stat.bg}`}>
+              <stat.icon className={`w-6 h-6 ${stat.color}`} />
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Main Content Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Left Column: Attendance List */}
+        <div className="lg:col-span-2 space-y-6">
+          <div className="glass-card p-6 border-white/5 space-y-6">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xl font-bold text-white">Attendance List</h3>
+
+              <div className="flex gap-2 bg-black/20 p-1 rounded-xl">
                 <button
-                  key={tab.label}
-                  onClick={() => setActiveStatusFilter(tab.status)}
+                  onClick={() => setViewMode('cards')}
                   className={cn(
-                    'flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all duration-300 whitespace-nowrap border',
-                    isActive && tab.color === 'primary' && 'bg-primary text-primary-foreground border-primary shadow-lg shadow-primary/20',
-                    isActive && tab.color === 'success' && 'bg-success text-success-foreground border-success shadow-lg shadow-success/20',
-                    isActive && tab.color === 'destructive' && 'bg-destructive text-destructive-foreground border-destructive shadow-lg shadow-destructive/20',
-                    isActive && tab.color === 'warning' && 'bg-warning text-warning-foreground border-warning shadow-lg shadow-warning/20',
-                    !isActive && 'bg-muted/50 border-border/50 hover:bg-muted hover:scale-105'
+                    "p-2 rounded-lg transition-all",
+                    viewMode === 'cards' ? "bg-primary/20 text-primary" : "text-white/40 hover:text-white"
                   )}
                 >
-                  <Icon className="w-4 h-4" />
-                  <span className="text-sm">{tab.label}</span>
-                  <span className={cn(
-                    'font-mono text-xs font-bold px-2 py-0.5 rounded-lg',
-                    isActive ? 'bg-background/20' : 'bg-background/80'
-                  )}>
-                    {tab.count}
-                  </span>
+                  <LayoutGrid className="w-4 h-4" />
                 </button>
-              );
-            })}
-          </div>
-
-
-
-          {/* Main Content Grid */}
-          <div className="flex gap-6">
-            {/* Attendance List - 2/3 width */}
-            <div className="w-2/3 space-y-4">
-              <div className="flex items-center justify-between p-4 rounded-xl glass border-border/30">
-                <h3 className="text-lg font-semibold">Student Attendance</h3>
-                <div className="flex items-center gap-2">
-                  <Button
-                    onClick={() => setShowAddStudentDialog(true)}
-                    className="bg-primary hover:bg-primary/90 text-primary-foreground"
-                    size="sm"
-                  >
-                    <UserPlus className="w-4 h-4 mr-2" />
-                    Add Student
-                  </Button>
-                  <div className="flex items-center gap-2 bg-muted/50 rounded-xl p-1">
-                    <button
-                      onClick={() => setViewMode('cards')}
-                      className={`p-2.5 rounded-lg transition-all duration-200 ${viewMode === 'cards' ? 'bg-background shadow-md' : 'hover:bg-background/50'}`}
-                    >
-                      <LayoutGrid className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => setViewMode('spreadsheet')}
-                      className={`p-2.5 rounded-lg transition-all duration-200 ${viewMode === 'spreadsheet' ? 'bg-background shadow-md' : 'hover:bg-background/50'}`}
-                    >
-                      <Table className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              <div className="max-h-[calc(100vh-400px)] overflow-y-auto custom-scrollbar pr-2">
-                {viewMode === 'cards' ? (
-                  <AttendanceList
-                    students={students}
-                    attendance={attendance}
-                    onStatusChange={handleStatusChange}
-                    canEdit={canEdit}
-                    filterStatus={activeStatusFilter}
-                    onStudentClick={handleStudentClick}
-                    onClearFilter={() => setActiveStatusFilter(null)}
-                  />
-                ) : (
-                  <SpreadsheetView
-                    students={students}
-                    attendance={attendance}
-                    onStatusChange={handleStatusChange}
-                    canEdit={canEdit}
-                    selectedDate={selectedDate}
-                    onDownload={handleDownload}
-                  />
-                )}
+                <button
+                  onClick={() => setViewMode('spreadsheet')}
+                  className={cn(
+                    "p-2 rounded-lg transition-all",
+                    viewMode === 'spreadsheet' ? "bg-primary/20 text-primary" : "text-white/40 hover:text-white"
+                  )}
+                >
+                  <Table className="w-4 h-4" />
+                </button>
               </div>
             </div>
 
-            {/* Analytics - 1/3 width */}
-            <div className="w-1/3">
-              <AnalyticsCharts stats={stats} trendData={trendData} />
+            {/* Filter Pills */}
+            <div className="flex gap-2 overflow-x-auto pb-2 custom-scrollbar">
+              {[
+                { status: null, label: 'All', icon: Users },
+                { status: 'present', label: 'Present', icon: CheckCircle2 },
+                { status: 'absent', label: 'Absent', icon: XCircle },
+                { status: 'od', label: 'On Duty', icon: Clock },
+              ].map((filter) => (
+                <button
+                  key={filter.label}
+                  onClick={() => setActiveStatusFilter(filter.status as AttendanceStatus)}
+                  className={cn(
+                    "px-4 py-2 rounded-xl text-sm font-medium border transition-all flex items-center gap-2 whitespace-nowrap",
+                    activeStatusFilter === filter.status
+                      ? "bg-white/10 border-white/20 text-white shadow-lg"
+                      : "bg-transparent border-white/5 text-white/40 hover:bg-white/5 hover:text-white"
+                  )}
+                >
+                  <filter.icon className="w-4 h-4" />
+                  {filter.label}
+                </button>
+              ))}
+            </div>
+
+            <div className="min-h-[400px]">
+              {viewMode === 'cards' ? (
+                <AttendanceList
+                  students={filteredStudents}
+                  attendance={attendance}
+                  onStatusChange={handleStatusChange}
+                  canEdit={canEdit}
+                  filterStatus={activeStatusFilter}
+                  onStudentClick={handleStudentClick}
+                  onClearFilter={() => setActiveStatusFilter(null)}
+                />
+              ) : (
+                <SpreadsheetView
+                  students={filteredStudents}
+                  attendance={attendance}
+                  onStatusChange={handleStatusChange}
+                  canEdit={canEdit}
+                  selectedDate={selectedDate}
+                  onDownload={handleDownload}
+                  onAddStudent={() => setShowAddStudentDialog(true)}
+                />
+              )}
             </div>
           </div>
         </div>
-      </main >
+
+        {/* Right Column: Analytics */}
+        <div className="space-y-6">
+          <AnalyticsCharts stats={stats} trendData={trendData} />
+        </div>
+      </div>
+
+      {/* Floating Add Student Button */}
+      {isAdmin && (
+        <Button
+          onClick={() => setShowAddStudentDialog(true)}
+          className="fixed bottom-8 right-8 h-16 w-16 rounded-full bg-gradient-to-r from-primary to-fuchsia-600 hover:scale-110 text-white shadow-2xl shadow-primary/40 z-50 transition-all duration-300"
+          size="icon"
+        >
+          <UserPlus className="w-7 h-7" />
+        </Button>
+      )}
 
       <StudentAnalyticsModal
         student={selectedStudent}
@@ -425,6 +447,6 @@ export default function Dashboard() {
         onOpenChange={setShowAddStudentDialog}
         onStudentAdded={fetchStudents}
       />
-    </div >
+    </div>
   );
 }

@@ -41,11 +41,20 @@ export function AddStudentDialog({ open, onOpenChange, onStudentAdded }: AddStud
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
-        // Validation
-        if (!formData.name || !formData.register_number || !formData.department || !formData.hostel_or_dayscolar) {
+        // Sanitize and Validate
+        const sanitizedData = {
+            name: formData.name.trim(),
+            register_number: formData.register_number.trim(),
+            department: formData.department,
+            hostel_or_dayscolar: formData.hostel_or_dayscolar,
+            section: formData.section.trim(),
+            email: formData.email.trim()
+        };
+
+        if (!sanitizedData.name || !sanitizedData.register_number || !sanitizedData.department || !sanitizedData.hostel_or_dayscolar) {
             toast({
                 title: 'Validation Error',
-                description: 'Please fill in all required fields',
+                description: 'Please fill in all required fields properly',
                 variant: 'destructive',
             });
             return;
@@ -55,11 +64,11 @@ export function AddStudentDialog({ open, onOpenChange, onStudentAdded }: AddStud
 
         try {
             const { error } = await supabase.from('students').insert({
-                name: formData.name,
-                register_number: formData.register_number,
-                department: formData.department,
-                hostel_or_dayscolar: formData.hostel_or_dayscolar,
-                email: formData.email || `${formData.register_number}@student.edu`,
+                name: sanitizedData.name,
+                register_number: sanitizedData.register_number,
+                department: sanitizedData.department,
+                hostel_or_dayscolar: sanitizedData.hostel_or_dayscolar,
+                email: sanitizedData.email || `${sanitizedData.register_number}@student.edu`,
             });
 
             if (error) throw error;
@@ -147,6 +156,7 @@ export function AddStudentDialog({ open, onOpenChange, onStudentAdded }: AddStud
                                 </SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="CSE">CSE - Computer Science</SelectItem>
+                                    <SelectItem value="AIDS">AIDS - Artificial Intelligence and Data Science</SelectItem>
                                     <SelectItem value="AIML">AIML - AI & Machine Learning</SelectItem>
                                     <SelectItem value="ECE">ECE - Electronics</SelectItem>
                                     <SelectItem value="EEE">EEE - Electrical</SelectItem>

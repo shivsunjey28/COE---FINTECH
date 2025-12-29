@@ -4,7 +4,7 @@ import { Student, Attendance, AttendanceStatus } from '@/lib/types';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { CheckCircle, XCircle, Clock, Search, Download } from 'lucide-react';
+import { CheckCircle, XCircle, Clock, Search, Download, UserPlus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface SpreadsheetViewProps {
@@ -14,15 +14,17 @@ interface SpreadsheetViewProps {
   canEdit: boolean;
   selectedDate: Date;
   onDownload: () => void;
+  onAddStudent?: () => void;
 }
 
-export function SpreadsheetView({ 
-  students, 
-  attendance, 
-  onStatusChange, 
-  canEdit, 
+export function SpreadsheetView({
+  students,
+  attendance,
+  onStatusChange,
+  canEdit,
   selectedDate,
-  onDownload 
+  onDownload,
+  onAddStudent
 }: SpreadsheetViewProps) {
   const [search, setSearch] = useState('');
 
@@ -51,14 +53,23 @@ export function SpreadsheetView({
     <div className="space-y-4">
       <div className="flex items-center gap-4">
         <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-pink-600 dark:text-pink-400 transition-colors" />
           <Input
             placeholder="Search by name, roll number, or department..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="pl-10 rounded-xl glass border-border/50"
+            className="pl-10 rounded-xl bg-pink-100 dark:bg-pink-900/50 backdrop-blur-xl border-2 border-pink-400 dark:border-pink-600 transition-all duration-200 focus:border-pink-500 dark:focus:border-pink-500 focus:ring-4 focus:ring-pink-300/50 dark:focus:ring-pink-500/30 focus:bg-pink-50 dark:focus:bg-pink-900/60 shadow-md shadow-pink-200/50 dark:shadow-pink-900/30 font-medium"
           />
         </div>
+        {onAddStudent && (
+          <Button
+            onClick={onAddStudent}
+            className="gap-2 bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-700 hover:to-fuchsia-700 text-white border-none shadow-lg shadow-violet-500/30"
+          >
+            <UserPlus className="w-4 h-4" />
+            Add New Students
+          </Button>
+        )}
         <Button onClick={onDownload} variant="outline" className="gap-2">
           <Download className="w-4 h-4" />
           Download CSV
@@ -87,9 +98,9 @@ export function SpreadsheetView({
               {filteredStudents.map((student, index) => {
                 const status = getStatusForStudent(student.id);
                 const att = attendanceMap.get(student.id);
-                
+
                 return (
-                  <TableRow 
+                  <TableRow
                     key={student.id}
                     className={cn(
                       'transition-colors',

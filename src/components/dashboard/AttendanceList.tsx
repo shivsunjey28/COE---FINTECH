@@ -103,7 +103,7 @@ export function AttendanceList({ students, attendance, onStatusChange, canEdit, 
     <div className="space-y-4">
       {/* Enhanced Search Bar */}
       <div className="relative group">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground transition-colors group-focus-within:text-primary" />
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/50 group-focus-within:text-primary transition-colors" />
         <Input
           ref={searchInputRef}
           placeholder="Search by name, roll number, or department..."
@@ -118,14 +118,14 @@ export function AttendanceList({ students, attendance, onStatusChange, canEdit, 
               setSearch('');
             }
           }}
-          className="pl-10 pr-10 rounded-xl glass border-border/50 transition-all focus:border-primary/50 focus:ring-2 focus:ring-primary/20"
+          className="pl-10 pr-10 rounded-xl glass-input border-white/10 h-10 w-full"
         />
         {search && (
           <Button
             variant="ghost"
             size="icon"
             onClick={handleClearSearch}
-            className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 rounded-lg hover:bg-muted"
+            className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 rounded-lg hover:bg-white/10 text-white/50 hover:text-white transition-colors"
           >
             <X className="w-4 h-4" />
           </Button>
@@ -134,7 +134,7 @@ export function AttendanceList({ students, attendance, onStatusChange, canEdit, 
 
       {/* Results Count with Animation */}
       <div className="flex items-center justify-between text-sm">
-        <div className="text-muted-foreground flex items-center gap-2">
+        <div className="text-white/40 flex items-center gap-2">
           <Sparkles className="w-4 h-4" />
           <span className="font-medium">
             Showing {filteredStudents.length} of {students.length} students
@@ -142,7 +142,7 @@ export function AttendanceList({ students, attendance, onStatusChange, canEdit, 
         </div>
         {search && (
           <div className="text-xs text-primary animate-fade-in">
-            Press <kbd className="px-2 py-1 bg-muted rounded text-xs">Enter</kbd> to mark as present
+            Press <kbd className="px-2 py-1 bg-white/10 rounded text-xs text-white/70">Enter</kbd> to mark as present
           </div>
         )}
       </div>
@@ -150,7 +150,7 @@ export function AttendanceList({ students, attendance, onStatusChange, canEdit, 
       {/* Student Cards or Empty State */}
       {filteredStudents.length > 0 ? (
         <div className="grid gap-3 pb-24">
-          {filteredStudents.map((student) => {
+          {filteredStudents.map((student, index) => {
             const att = attendanceMap.get(student.id);
             const effectiveStatus = getEffectiveStatus(student.id);
             return (
@@ -162,6 +162,7 @@ export function AttendanceList({ students, attendance, onStatusChange, canEdit, 
                 onStatusChange={onStatusChange}
                 canEdit={canEdit}
                 onClick={() => onStudentClick?.(student)}
+                index={index}
               />
             );
           })}

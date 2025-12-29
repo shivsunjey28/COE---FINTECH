@@ -18,14 +18,14 @@ export function DatePicker({ date, onDateChange, isAdmin }: DatePickerProps) {
   const goToPreviousDay = () => {
     const prev = new Date(date);
     prev.setDate(prev.getDate() - 1);
-    if (isAdmin || prev.getTime() === today.getTime()) {
-      onDateChange(prev);
-    }
+    // Allow viewing any past date
+    onDateChange(prev);
   };
 
   const goToNextDay = () => {
     const next = new Date(date);
     next.setDate(next.getDate() + 1);
+    // Allow viewing up to today, admins can view future
     if (next <= today || isAdmin) {
       onDateChange(next);
     }
@@ -39,7 +39,6 @@ export function DatePicker({ date, onDateChange, isAdmin }: DatePickerProps) {
         variant="ghost"
         size="icon"
         onClick={goToPreviousDay}
-        disabled={!isAdmin && !isToday}
         className="rounded-xl"
       >
         <ChevronLeft className="w-5 h-5" />
@@ -70,8 +69,9 @@ export function DatePicker({ date, onDateChange, isAdmin }: DatePickerProps) {
             initialFocus
             className="pointer-events-auto"
             disabled={(d) => {
+              // Only disable future dates for non-admins
               if (isAdmin) return d > today;
-              return d.toDateString() !== today.toDateString();
+              return d > today;
             }}
           />
         </PopoverContent>
